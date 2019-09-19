@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=1024" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <title>pulzusIMpulzusOK</title>
+    
+    <meta name="description" content="pulzusIMpulzusOK - technikai kihívások egy művészeti projectben" />
+    <meta name="author" content="Gyuri Horák" />
+
+    <link href="//fonts.googleapis.com/css?family=Open+Sans:regular,semibold,italic,italicsemibold|PT+Sans:400,700,400italic,700italic|PT+Serif:400,700,400italic,700italic" rel="stylesheet" />
+
+    <link href="css/style.css" rel="stylesheet" />
+    
+    <link rel="shortcut icon" href="favicon.png" />
+    <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+</head>
+
+<body>
+
+<!--
+    For example this fallback message is only visible when there is `impress-not-supported` class on body.
+-->
+<div class="fallback-message">
+    <p>Your browser <b>doesn't support the features required</b> by impress.js, so you are presented with a simplified version of this presentation.</p>
+    <p>For the best experience please use the latest <b>Chrome</b>, <b>Safari</b> or <b>Firefox</b> browser.</p>
+</div>
+
+<div id="impress" data-autoplay="0">
+
+    <div id="start" class="step slide" data-x="-1000" data-y="0">
+      <h1>pulzusIMpulzusOK</h1>
+      <h2>technikai kihívások egy művészeti projectben</h2>
+    </div>
+
+    <div class="step slide" data-x="0" data-y="0">
+      <p>
+      A kiállítótérben négy inga leng, melyek folyamatosan lengenek a művésznő által megírt ritmusképlet szerint.
+      </p>
+      <p>
+      A látogatók a kiállítótérben mozoghatnak az ingák között, mozgásukra reagálva változik a kivetített vizuál, illetve a hanghatások.
+      </p>
+    </div>
+
+    <div class="step slide" data-x="1000" data-y="0">
+      <h2>Technikai kihívások</h2>
+      <ul>
+        <li>
+          ingák mozgásban tartása
+        </li>
+        <li>
+          ritmusképlet az ingák mozgatásához
+        </li>
+        <li>
+          látogatók mozgásának követése
+        </li>
+        <li>
+          látogatók mozgásának vizualizációja
+        </li>
+        <li>
+          hanghatások
+        </li>
+      </ul>
+    </div>
+
+    <div class="step slide" data-x="2000" data-y="0">
+      <h2>Központi vezérlő egység</h2>
+      <ul>
+        <li>
+          feladata: összekösse és vezérelje az installáció egységeit
+        </li>
+        <li>
+          Raspberry Pi (3 B+)
+        </li>
+        <li>
+          WiFi "router"
+        </li>
+        <li>
+          a vezérléshez szükséges programok rajta futnak
+        </li>
+      </ul>
+    </div>
+
+    <!-- TODO admin felulet -->
+
+    <div class="step slide" data-x="3000" data-y="0">
+      <h2>Látogatók követése</h2>
+      <h3>Felmerült lehetőségek:</h3>
+      <ul>
+        <li>
+          kamera, gépi látás
+          <ul>
+            <li>
+              az ingák mozgását nehéz figyelmen kívül hagyni
+            </li>
+            <li>
+              a kiállítótér világítása nem kedvez
+            </li>
+          </ul>
+        </li>
+        <li>
+          ultrahangos távolságérzékelők
+          <ul>
+            <li>
+              2-4 méter messzire érzékelnek max. - ~13m kell
+            </li>
+          </ul>
+        </li>
+        <li>
+          infrás mozgásérzékelők
+          <ul>
+            <li>
+              olcsók, ~12 méterre ellátnak
+            </li>
+            <li>
+              az ingákat nem "látják"
+            </li>
+          </ul>
+        </li>
+      </ul>
+    </div>
+
+    <div class="step slide" data-x="4000" data-y="0">
+      <h2>Látogatók követése</h2>
+      <ul>
+        <li>
+          HW:
+          <ul>
+            <li>
+              ESP32 mikrovezérlő
+            </li>
+            <li>
+              16 darab PIR (hagyományos infrás) mozgásérzékelő
+            </li>
+            <li>
+              mini webszerverként adja vissza a mozgásérzékelők jeleit
+            </li>
+          </ul>
+        </li>
+        <li>
+          kb. 13x13 méter egy 32x32-es mátrix-szal lefedve (4 egység)
+        </li>
+        <li>
+          bővíthető, más alakú kiállítótérre szabható
+        </li>
+      </ul>
+    </div>
+
+    <div class="step slide" data-x="5000" data-y="0">
+      <h2>Ingák mozgatása</h2>
+      <ul>
+        <li>
+          HW:
+          <ul>
+            <li>
+              ESP32 mikrovezérlő
+            </li>
+            <li>
+              ingánként egy-egy szervómotor
+            </li>
+            <li>
+              az ingák paraméterei mini webszerveren keresztül állíthatóak
+            </li>
+          </ul>
+        </li>
+        <li>
+          Ingaparaméterek: periódusidő, húzási idő/erő, tartási idő/erő, visszatekerési idő/erő, <i>ritmus</i>
+        </li>
+        <li>
+          A <i>ritmus</i> paraméter szabályozza, hogy a motor milyen ütemben hajtsa végre a hajtási ciklust (minden <b>n</b>-edik periódusban), a létrehozott <i>ritmusképlet</i> alapján.
+        </li>
+        <li>
+          Az ingák paramétereit nagyon pontosan kell beállítani ahhoz, hogy azok valóban mozgásban maradjanak.
+        </li>
+      </ul>
+    </div>
+
+    <div class="step slide" data-x="6000" data-y="0">
+      <h2>Hangok</h2>
+      <p>
+        A kiállítás alaphangját az ingákat hajtó motorok "zenéje" adja.
+      </p>
+      <p>
+        A mikrofonokkal begyűjtött motorhangokat egy zenész/hangmérnök "élvezhető" hanghatásokká alakítja, amihez még felhasználhatja a mozgásérzékelők jeleit is, amiket egy a központi vezérlőhöz kapcsolódó kis program MIDI jellé alakit. Így akár az is megoldható, hogy a terem azon felében szóljon hangosabban a "zene", ahol több a mozgás.
+      </p>
+    </div>
+
+    <div class="step slide" data-x="7000" data-y="0">
+      <h2>Vizualizáció</h2>
+      <p>
+        A központi egységtől lekért adatok alapján egy JavaScript/WebGL webalkalmazás állitja elő a mozgóképet, a ritmusképlet, illetve a látogatók mozgása alapján.
+      </p>
+    </div>
+
+    <!-- TODO vizualizacio screenshot / iframe -->
+
+
+    <div class="step slide" data-x="10000" data-y="0">
+    </div>
+</div>
+
+<div id="impress-toolbar"></div>
+
+<script src="js/impress.js"></script>
+<script>impress().init();</script>
+
+</body>
+</html>
