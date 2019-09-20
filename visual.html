@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PulzusIMpulzusOK</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+    }
+    #scene {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: #000;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="scene">
+  </canvas>
+<script src="three.js"></script>
+<script id="vs" type="x-shader/x-vertex">
+  varying vec4 v_color;
+  varying vec2 v_uv;
+  
+  void main() {
+  
+    v_uv = uv;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+    v_color = vec4(position.z * position.x * 0.5 + 0.5, position.z * position.y * 0.5 + 0.5, position.z * 0.5 + 0.5, 1.0);
+  
+  }
+</script>
+<script id="fs" type="x-shader/x-fragment">
+#define SENSORS 64.
+#define FLOOR 10.0
+#define HORIZONT 30.0
+#define DEPTH 100.
+#define BASE_FREQ .2
+#define BASE_AMP 1.
+#define NOTE_SIZE .2
+#define NOTE_HEIGHT .4
+#define LINE_WIDTH .05
+#define MAX_NOTES 200.
+
+#define S(a,b,t) smoothstep(a,b,t)
+
+precision mediump float;
+precision mediump int;
+varying vec2 v_uv;
+uniform float u_time;
+uniform float u_track_length;
+uniform float u_track_max_time;
+uniform vec3 u_mouse;
+uniform vec2 u_resolution;
+uniform sampler2D tex_movement;
+uniform sampler2D tex_track;
+
+float get_signal(float id, float layer) {
+  vec4 color = texture2D(tex_movement, vec2(fract(id / SENSORS), fract(layer / DEPTH)));
+  return color.r;
+}
+
+float fbm_full(float x) {
+  float amplitude = BASE_AMP;
+  float frequency = BASE_FREQ;
+  float y = sin(x * frequency);
+  float t = 0.01*(-u_time*130.0);
+  y += sin(x*frequency*2.1 + t)*4.5;
+  y += sin(x*frequency*1.72 + t*1.121)*4.0;
+  y += sin(x*frequency*2.221 + t*0.437)*5.0;
+  y += sin(x*frequency*3.1122+ t*4.269)*2.5;
+  y *= amplitude*0.06;
+    
+  return y;
+}
+
+float fbm(float x) {
+  float amplitude = BASE_AMP;
+  float frequency = BASE_FREQ;
+  float y = sin(x * frequency);
+  float t = 0.01*(-u_time*130.0);
+  y += sin(x*frequency*1.72 + t*1.121)*4.0;
+  y += sin(x*frequency*3.1122+ t*4.269)*2.5;
+  y *= amplitude*0.06;
+    
+  return y;
+}
+
+float fbm2(float x) {
+  float amplitude = BASE_AMP;
+  float frequency = BASE_FREQ;
+  float y = sin(x * frequency);
+  float t = 0.004*(-u_time*340.0);
+  y += sin(x*frequency*3.12 + t*1.421)*4.0;
+  y += sin(x*frequency*5.1122+ t*2.269)*2.5;
+  y *= amplitude*0.06;
+    
+  return y;
+}
+
+float N1(float x) {
+  return fract(sin(x * 1234.1)*3435.434);
+}
+
+float box(vec2 uv, vec2 bl, vec2 tr) {
+  vec2 s = step(bl, uv) - step(tr, uv);
+  return s.x * s.y;
+}
+
+float circle(vec2 st, float radius, float aspect){
+  vec2 dist = st - vec2(0.5);
+  dist.y = dist.y * aspect;
+
+  return step(dot(dist, dist) * 4.0, radius);
+}
+
+float wave(vec2 uv, float id, float layer) {
+  vec2 st = uv;
+  float z = (DEPTH-layer) / DEPTH;
+  float fade = .5 + .5 * z;
+  
+  st.y -= fbm(.1 * layer + id/8.) + (1. - z * z) * (HORIZONT-FLOOR);
+  st.x = layer > 0. ? fract(st.x + .5 * fbm(10. * layer)) : st.x;
+  
+  return box(st, .2 * vec2(.5 - fade * fade / 2.), .2 * vec2(.5 + fade * fade / 2.));
+}
+
+float motion(vec2 st, float id) {
+  vec2 bst = vec2(0.);
+  float sig = 0.;
+  float curr_sig = 0.;
+  float next_sig = 0.;
+  float delta_sig = 0.;
+  float color1 = 0.;
+  float color2 = 0.;
+  float color3 = 0.;
+  float color4 = 0.;
+  float phase = 0.;
+  
+  for (float i = 0.; i < DEPTH; i+=1.) {
+    phase = 1. - i / DEPTH;
+    next_sig = get_signal(id + 1.0, i) * 2. * (.2 + .8 * phase);
+    sig = get_signal(id, i) * 2. * (.2 + .8 * phase);
+    delta_sig = next_sig - sig;
+
+    // current
+    bst = vec2(st.x, st.y * SENSORS - FLOOR- sig);
+    color1 += wave(bst, id, i) * ((i > 0.) ? .7 : 1.) * (.5 + .5 * sig);
+
+    // next 1
+    curr_sig = sig + delta_sig * .1;
+    bst = vec2(fract(st.x + .8), st.y * SENSORS - FLOOR - curr_sig);
+    color2 += wave(bst, id, i) * ((i > 0.) ? .7 : 1.) * (.5 + .5 * curr_sig);
+
+    // next 2
+    curr_sig = sig + delta_sig * .5;
+    bst = vec2(fract(st.x + .5), st.y * SENSORS - FLOOR - curr_sig);
+    color3 += wave(bst, id, i) * ((i > 0.) ? .7 : 1.) * (.5 + .5 * curr_sig);
+
+    // next 3
+    curr_sig = sig + delta_sig * .9;
+    bst = vec2(fract(st.x + .2), st.y * SENSORS - FLOOR - curr_sig);
+    color4 += wave(bst, id, i) * ((i > 0.) ? .7 : 1.) * (.5 + .5 * curr_sig);
+  }
+
+  return clamp(color1 + color2 + color3 + color4, 0., 1.);
+}
+
+vec3 get_note(float id) {
+  if (id < 0. || id >= u_track_length) return vec3(0.);
+  vec4 color = texture2D(tex_track, vec2((id + .1) / u_track_length, 0.));
+  return color.rgb;
+}
+
+float note_line(vec2 st, float height, float side, float id) {
+  float phase = 1. - S(.5, .5 + height, st.y);
+  float wave = phase * fbm(123.32 + st.y * 74.3 + id);
+  float xdisort = u_track_length / MAX_NOTES;
+
+  // middle circle
+  float midcircle = circle(st - vec2(wave, 0.), NOTE_SIZE * .1, u_track_length / 8. / xdisort);
+  
+  return midcircle + 
+         (S(.5 - LINE_WIDTH, .5, st.x - wave) - S(.5, .5 + LINE_WIDTH, st.x - wave)) * // line
+         step(-side * st.y, -side * .5) * // side
+         step(side * st.y, side * (height + .5)); // height
+}
+
+vec3 track(vec2 uv, float delta) {
+  vec3 color = vec3(0.);
+
+  float id = floor(uv.x * u_track_length * .25);
+  color = vec3(0., delta/u_track_length, 0);
+  float xwave = fbm(id + uv.y) * .3;
+  vec2 st = vec2(fract(uv.x * u_track_length * .25) + xwave, uv.y * 2. - 1.);
+  float side = (.5 - step(N1(id + delta), .3)) * 2.;
+  vec3 note = get_note((id + delta) * 4.);
+  float height = (.1 + note.z * .9) * // active
+                 side * // above/under the line
+                 (.1 + note.x * .5) / u_track_max_time * NOTE_HEIGHT * 255. + // actual height
+                 fbm2(id) * .05; // "wave"
+
+  // horizontal line
+  // color += vec3(S(.498, .50, st.y) - S(.50, .502, st.y)) * .75;
+
+  // vertical line
+  color += vec3(note_line(st, height, side, id));
+
+  // note
+  float xdisort = u_track_length / MAX_NOTES;
+  float ccolor = circle(st - vec2(0., height), NOTE_SIZE * (.25 + note.z * .5), u_track_length / 8. / xdisort) * (1. + note.y) * .5;
+  color = mix(color, vec3(ccolor), step(.1, ccolor));
+
+  // DEBUG
+  // color += note * clamp(st.y, 0., 1.);
+
+  return (1. - step(id, -.001)) * step((id + delta) * 4., u_track_length + .001) * clamp(color.xxx, 0., 1.);
+}
+
+void main() {
+  // aspect ratio correction
+  vec2 uv = (gl_FragCoord.xy-u_resolution.xy*.5)/u_resolution.y + vec2(.5);
+
+  // 64 columns
+  vec2 st = vec2(fract(uv.x * SENSORS), uv.y);
+  float id = floor(uv.x * SENSORS);
+  
+  vec3 color = vec3(0.);
+
+  // transform uv based on note number
+  float numrate = u_track_length / MAX_NOTES;
+  uv.x = (uv.x + .2) / 1.4;
+  uv.x = (uv.x - (1. - numrate) / 2.) / numrate;
+
+  float layer_delta = 1. / u_track_length;
+  vec2 tuv = uv;
+  // t0
+  color += track(tuv, 0.);
+  // t1
+  tuv.x = (uv.x - layer_delta + .4 * (uv.y - .75) * cos(4. * (uv.y + .5 + u_time * .2)));
+  color += track(tuv, .25);
+  // t2
+  tuv.x = (uv.x - layer_delta * 2. + .2 * (uv.y - .75) * cos(2. * (uv.y + .8 + u_time * .128)));
+  color += track(tuv, .5);
+  // t3
+  tuv.x = (uv.x - layer_delta * 3. + .3 * (uv.y - .75) * cos(4.6 * (uv.y + .2 + u_time * .219)));
+  color += track(tuv, .75);
+
+  color = max(color, vec3(motion(st, id)));
+
+  gl_FragColor = vec4(color, 1.0);
+}
+</script>
+<script>
+  const NUM_SENSORS = 64;
+  const HISTORY = 100;
+  const CONFIG = {
+    RUN: false,
+    RANDOM_SENSORS: !false,
+    FAKE_TRACK: !false
+  };
+
+  const API_DATA = {
+    detectors: {},
+    tracks: [],
+    movement: []
+  };
+
+  let history = new Uint8Array(3 * NUM_SENSORS * HISTORY);
+  let tex_movement = new THREE.DataTexture(history, NUM_SENSORS, HISTORY, THREE.RGBFormat);
+  tex_movement.needsUpdate = true;
+
+  let track = new Uint8Array([200, 100, 100, 100, 200, 100, 100, 100, 200]);
+  let track_length = 3;
+  let track_max_time = 200;
+  let tex_track = new THREE.DataTexture(track, 3, 1, THREE.RGBFormat);
+  tex_track.needsUpdate = true;
+
+  let uniforms = {};
+
+  function init() {
+    let camera = new THREE.Camera();
+    camera.position.z = 1;
+
+    let scene = new THREE.Scene();
+    let geometry = new THREE.PlaneBufferGeometry( 2, 2 );
+
+    uniforms = {
+      u_time: {type: "f", value: 1.0},
+      u_resolution: {type: "v2", value: new THREE.Vector2()},
+      u_mouse: {type: "v3", value: new THREE.Vector3()},
+      u_movement: {type: "fv1", value: new Float32Array(NUM_SENSORS*HISTORY)},
+      u_track_length: {type: "f", value: track_length},
+      u_track_max_time: {type: "f", value: track_max_time},
+      tex_movement: {type: "t", value: tex_movement},
+      tex_track: {type: "t", value: tex_track}
+    };
+
+    let material = new THREE.ShaderMaterial({
+      uniforms: uniforms,
+      vertexShader: document.getElementById('vs').textContent.trim(),
+      fragmentShader: document.getElementById('fs').textContent.trim()
+    });
+
+    let mesh = new THREE.Mesh(geometry, material);
+    scene.add(mesh);
+
+    let canvas = document.getElementById('scene');
+
+    document.body.appendChild(canvas);
+
+    let context = canvas.getContext('webgl');
+    let renderer = new THREE.WebGLRenderer({canvas: canvas, context: context, alpha: true});
+    renderer.setPixelRatio(window.devicePixelRation);
+
+    let resize = () => {
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      uniforms.u_resolution.value.x = renderer.domElement.width;
+      uniforms.u_resolution.value.y = renderer.domElement.height;
+    };
+
+    window.addEventListener("resize", resize, false);
+    resize();
+
+    document.onmousemove = e => {
+      uniforms.u_mouse.value.x = e.pageX;
+      uniforms.u_mouse.value.y = e.pageY;
+      uniforms.u_mouse.value.z = e.buttons;
+    };
+
+    const get_movement_phase = (current, last, phase) => {
+      if (phase <= 0) {
+        return last;
+      } else if (phase >= 1) {
+        return current;
+      }
+
+      let movement = new Uint8Array(3 * NUM_SENSORS);
+
+      for (let i = 0; i < 3 * NUM_SENSORS; i++) {
+        movement[i] = current[i] * phase + last[i] * (1 - phase);
+      }
+
+      return movement;
+    };
+
+    let current_movement = new Uint8Array(3 * NUM_SENSORS);
+    let prev_movement = new Uint8Array(3 * NUM_SENSORS);
+    let current_tracks = null;
+    let prev_tracks = null;
+    let last_movement = 0;
+    let last_history_update = 0;
+    let last_track_update = 0;
+
+    function animate() {
+      requestAnimationFrame(animate);
+      if (CONFIG.RUN) {
+
+        uniforms.u_time.value += 0.01;
+
+        now = +(new Date);
+        if (now - last_movement >= 1000) {
+          // movement
+          last_movement = now;
+
+          movement = get_movement();
+
+          prev_movement = current_movement;
+          current_movement = new Uint8Array(3 * NUM_SENSORS);
+
+          for (let i = 0, pos = 0, value = 0; i < NUM_SENSORS; i++) {
+            pos = i * 3;
+            value = movement[i] * 255;
+            current_movement[pos]   = value; // r
+            current_movement[pos+1] = value; // g
+            current_movement[pos+2] = value; // b
+          }
+
+          // tracks
+          prev_tracks = current_tracks;
+          current_tracks = calc_tracks();
+          if (!prev_tracks) prev_tracks = current_tracks;
+        }
+
+        if (now - last_history_update >= 100) {
+          last_history_update = now;
+
+          let phase = (now - last_movement) / 1000;
+          let movement_phase = get_movement_phase(current_movement, prev_movement, phase);
+
+          let old_history = history.slice(0, 3 * NUM_SENSORS * (HISTORY-1));
+          history.set(movement_phase);
+          history.set(old_history, 3 * NUM_SENSORS);
+
+          // texture update
+          tex_movement.needsUpdate = true;
+        }
+
+        if (now - last_track_update >= 30) {
+          last_track_update = now;
+          let phase = (now - last_movement) / 1000;
+
+          let tracks = merge_tracks(prev_tracks, current_tracks, phase);
+          track.set(tracks);
+          tex_track.needsUpdate = true;
+        }
+
+        // render
+        renderer.render(scene, camera);
+      }
+    }
+
+    animate();
+    update();
+  }
+
+  document.addEventListener('click', () => {
+    CONFIG.RUN = !CONFIG.RUN;
+  });
+
+  let last_movement = 0;
+
+  function get_movement() {
+    if (CONFIG.RANDOM_SENSORS) {
+      let movement = [];
+      for (let i = 0; i < NUM_SENSORS; i++) {
+        movement.push(Math.random() > .3 ? 0 : 1);
+      }
+      return movement;
+    }
+    
+    return API_DATA.movement;
+  }
+
+  async function get_tracks(doinit) {
+    for (let i = 0; i < 4; i++) {
+      API_DATA.tracks[i] = [[10, 20, 30], [30, 40, 50]]
+    }
+    if (doinit) {
+      init_tracks();
+      init();
+    }
+  }
+
+  async function update() {
+    API_DATA.detectors = {};
+    update_detectors();
+    if (CONFIG.RUN) {
+      setTimeout(update, 500);
+    }
+  }
+
+  function merge_tracks(prev, curr, phase) {
+    let merged = Array.from(curr);
+    for (let i = 2; i < curr.length; i+=3) {
+      merged[i] = (1 - phase) * prev[i] + phase * curr[i];
+    }
+
+    return merged;
+  }
+
+  function calc_tracks() {
+    let tracks = [];
+    let positions = API_DATA.detectors && API_DATA.detectors.position || [0,0,0,0];
+
+    track_max_time = 1;
+
+    API_DATA.tracks.forEach((trk, i) => {
+      let curr_pos = 0;
+      trk = trk.flatMap(note => {
+        curr_pos += note[0];
+        let active = 0;
+        if (curr_pos > positions[i]) {
+          active = 1;
+          curr_pos = -Infinity;
+        }
+        if (note[0] > track_max_time) {
+          track_max_time = note[0];
+        }
+        return [note[0], note[1] ? 255 / note[1] : 0, active * 255]; // time, power, active
+      });
+      tracks = tracks.concat(trk);
+    });
+    
+    if (CONFIG.FAKE_TRACK) {
+      let nt = [];
+      for (let i=0; i<15; i++) {
+        nt = nt.concat(tracks);
+      }
+      nt = nt.map((note, i) => {
+        return i % 3 === 2 ? 0 : note;
+      });
+      let t = +(new Date() / 1000);
+      let idx1 = 0 + .3 * t % 28,
+          idx2 = 28 + .4 * t % (64-28),
+          idx3 = 64 + .1 * t % (99-64),
+          idx4 = 99 + .25 * t % (164-99);
+      nt[3*Math.floor(idx1)+2] = 255;
+      nt[3*Math.floor(idx2)+2] = 255;
+      nt[3*Math.floor(idx3)+2] = 255;
+      nt[3*Math.floor(idx4)+2] = 255;
+      tracks = nt;
+    }
+    
+    return tracks;
+  }
+
+  function init_tracks() {
+    let tracks = calc_tracks();
+    track = new Uint8Array(tracks);
+    track_length = tracks.length / 3;
+    tex_track = new THREE.DataTexture(track, track_length, 1, THREE.RGBFormat);
+    tex_track.needsUpdate = true;
+  }
+
+  function update_detectors() {
+    // update movement data
+    API_DATA.movement = API_DATA.detectors.north.concat(API_DATA.detectors.east);
+  };
+
+  get_tracks(true);
+</script>
+</body>
+</html>
